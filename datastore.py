@@ -28,6 +28,7 @@ chronous_session_maker = sessionmaker(bind=chronous_engine)
 # ormオブジェクトを作成
 orm_trip = entity.TripMean
 orm_route = entity.RouteMean
+orm_operation = entity.Operation
 
 
 def get_all_trip_mean(route_id):
@@ -62,6 +63,24 @@ def get_route_mean(route_id):
         )
 
     return df
+
+
+def get_operation_data(trip_id):
+    with chronous_session_maker() as session:
+        target_records = (
+            session
+            .query(orm_operation)
+            .filter(orm_operation.trip_id == trip_id)
+            .all()
+        )
+
+        df = to_df(
+            orm_model=orm_operation,
+            records=target_records
+        )
+
+    return df
+
 
 
 def to_df(
