@@ -1,108 +1,54 @@
-from dash import Dash, dcc, html
-import plotly.graph_objs as go
-import plotly.express as px
+from dash import Dash, dcc, html, Input, Output
+import argparse
 import polars as pl
-
 import datastore
+import graph
+
+
+# コマンドライン引数
+parser = argparse.ArgumentParser(description="Example script")
+
+# 引数の設定
+parser.add_argument(
+    "--type",
+    type=str,
+    help="表示させるデータ群を入力してください"
+)
+parser.add_argument(
+    "--route",
+    type=str,
+    help="route_idを入力してください"
+)
+parser.add_argument(
+    "--trip",
+    type=str,
+    help="trip_idを入力してください"
+)
+args = parser.parse_args()
 
 # Dashアプリ作成
 app = Dash(__name__)
 
-# Figure作成
-fig_line = go.Figure()
-
 # データ取得
-all_trip_mean = datastore.get_all_trip_mean("②美山線(114)")
-route_mean = datastore.get_route_mean("②美山線(114)")
-trip_data = datastore.get_operation_data("土日祝_06時55分_系統114")
+all_trip_mean = datastore.get_all_trip_mean(args.route)
+route_mean = datastore.get_route_mean(args.route)
+trip_data = datastore.get_operation_data(args.trip)
+map_data = datastore.get_stops_info(args.trip)
 
-# 折れ線グラフ作成
-route_name = ""
-df_list = []
-# 一時的にためるリスト
-rows = []
-for row in trip_data.iter_rows(named=True):
-    # 折れ線グラフ
-    fig_line.add_trace(
-        go.Scatter(
-            y=row["delay"],
-            mode="lines",
-            name=str(row["date"]),
-            line=dict(width=2, color="#636efa")
-        )
-    )
-
-    # 箱ひげ図用データの作成
-    df_row = pl.DataFrame(
-        [row["delay"]],
-        schema=[
-            f"{i}" for i in range(len(row["delay"]))
-        ],
-        orient="row"
-    )
-    df_list.append(df_row)
-
-    # ヒストグラムの作成
-    x_line = [
-        i for i in range(len(row["delay"]))
-    ]
-    for sequence, delay in zip(x_line, row["delay"]):
-        rows.append({"stop_sequence": sequence, "delay": delay})
-
-    route_name = row["route_id"]
-
-fig_line.add_trace(
-    go.Scatter(
-        y=route_mean["delay_mean"].to_list(),
-        mode="lines",
-        name="routeの平均",
-        line=dict(width=4, color="white")
-    )
-)
-
-fig_line.update_layout(
-    title=f"{route_name}の遅延推移",
-    xaxis_title="停留所番号",
-    yaxis_title="遅延時間（秒）",
-    template="plotly_dark",
-    showlegend=False  # 凡例多すぎるなら消す
-)
-
-# 箱ひげ図
-box_data = pl.concat(df_list)
-fig_box = px.box(
-    box_data
-)
-fig_box.update_layout(
-    xaxis_title="停留所番号",
-    yaxis_title="遅延時間（秒）",
-    template="plotly_dark",
-    showlegend=False
-)
-
-# 2D ヒストグラム等高線
-hist_df = pl.DataFrame(rows)
-fig_histgram = px.density_contour(
-    hist_df,
-    x="stop_sequence",
-    y="delay"
-)
-fig_histgram.update_traces(
-    contours_coloring="fill",
-    contours_showlabels=True
-)
-fig_histgram.update_layout(
-    xaxis_title="停留所番号",
-    yaxis_title="遅延時間（秒）",
-    template="plotly_dark",
-    showlegend=False,
-    height=700
-)
+# グラフオブジェクトの作成
+if args.type == "date":
+    fig_line = graph.create_line(trip_data, route_mean, "date")
+    fig_box = graph.create_box(trip_data)
+    fig_histgram = graph.create_hist(trip_data)
+elif args.type == "trip":
+    fig_line = graph.create_line(all_trip_mean, route_mean, "trip_id")
+    fig_box = graph.create_box(all_trip_mean)
+    fig_histgram = graph.create_hist(all_trip_mean)
 
 # Dashレイアウト
 app.layout = html.Div(
     children=[
-        html.H2("バス運行データ可視化ダッシュボード"),
+        html.H1("バス運行データ可視化ダッシュボード"),
 
         # 折れ線グラフ
         dcc.Graph(
@@ -120,9 +66,43 @@ app.layout = html.Div(
         dcc.Graph(
             figure=fig_histgram,
             style={"backgroundColor": "black"}
+        ),
+
+        # バス停マップ
+        dcc.Graph(
+            id="bus-map",
+            style={"backgroundColor": "black"}
+        ),
+
+        # スライダー
+        dcc.Slider(
+            id="seq-slider",
+            min=map_data["stop_sequence"].min(),
+            max=map_data["stop_sequence"].max(),
+            step=1,
+            value=map_data["stop_sequence"].min(),
+            marks={
+                i: str(i)
+                for i in map_data["stop_sequence"]
+            },
+            included=True,
+            updatemode='drag',
+            tooltip={
+             "always_visible": True,
+             "style": {"color": "black", "fontSize": "20px"},
+            }
         )
     ]
 )
+
+
+@app.callback(
+        Output("bus-map", "figure"),
+        Input("seq-slider", "value")
+)
+def create_map(selected_seq):
+    return graph.update_map(map_data, selected_seq)
+
 
 # 実行
 if __name__ == "__main__":

@@ -19,11 +19,24 @@ chronous_connection_url = (
     f"@{chronous_host}:{chronous_port}/{chronous_dbname}"
 )
 
+# ヒストリアDB接続用URLの作成
+historia_user = os.getenv("HISTORIA_USER")
+historia_password = os.getenv("HISTORIA_PASSWORD")
+historia_host = os.getenv("HISTORIA_HOST")
+historia_port = os.getenv("HISTORIA_PORT")
+historia_dbname = "kitami"
+historia_connection_url = (
+    f"postgresql+psycopg2://{historia_user}:{historia_password}"
+    f"@{historia_host}:{historia_port}/{historia_dbname}"
+)
+
 # engineオブジェクト作成
 chronous_engine = create_engine(chronous_connection_url)
+historia_engine = create_engine(historia_connection_url)
 
 # DBセッションオブジェクトの作成
 chronous_session_maker = sessionmaker(bind=chronous_engine)
+historia_session_maker = sessionmaker(bind=historia_engine)
 
 # ormオブジェクトを作成
 orm_trip = entity.TripMean
@@ -109,3 +122,60 @@ def to_df(
     df = pl.DataFrame(data, schema=column_names)
 
     return df
+
+
+def get_stops_info(trip_id):
+    # stop_times(取得カラム：trip_id,stop_id,stop_sequence)からtrip_idを指定してデータを取得
+    with historia_session_maker() as session:
+        stops = (
+            session
+            .query(entity.Stop)
+            .all()
+        )
+        stop_times = (
+            session
+            .query(entity.StopTime)
+            .filter(entity.StopTime.trip_id == trip_id)
+            .all()
+        )
+        # dfに変換
+        stops_df = to_df(
+            orm_model=entity.Stop,
+            records=stops
+        )
+        stop_times_df = to_df(
+            orm_model=entity.StopTime,
+            records=stop_times
+        )
+
+    # stop_timesデータを軸に共有結合(必要カラム:stop_name,lat,lon,sequence)
+    df = stop_times_df.join(stops_df, on="stop_id", how="inner")
+
+    df = (
+        df
+        .select(
+            "stop_name",
+            "stop_lat",
+            "stop_lon",
+            "stop_sequence"
+        )
+        .sort("stop_sequence")
+    )
+
+    df = df.with_columns(
+        [
+            pl.Series(
+                name="stop_name",
+                values=[to_fullwidth(x) for x in df["stop_name"]]
+            )
+        ]
+    )
+
+    return df
+
+
+# 半角数字・英字 → 全角に変換
+def to_fullwidth(s):
+    if s is None:
+        return s
+    return "".join(chr(ord(c)+0xFEE0) if 0x21 <= ord(c) <= 0x7E else c for c in s)

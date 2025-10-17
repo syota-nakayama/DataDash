@@ -1,4 +1,4 @@
-from sqlalchemy import Column, TEXT, PrimaryKeyConstraint, Integer, ARRAY, Date
+from sqlalchemy import Column, TEXT, PrimaryKeyConstraint, Integer, ARRAY, Date, NUMERIC
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -18,7 +18,7 @@ class TripMean(Base):
 
     route_id = Column(TEXT)
     trip_id = Column(TEXT)
-    delay_mean = Column(ARRAY(Integer))
+    delay = Column(ARRAY(Integer))
 
 
 class RouteMean(Base):
@@ -26,7 +26,7 @@ class RouteMean(Base):
     __table_args__ = {"schema": "kitami", "extend_existing": True}
 
     route_id = Column(TEXT, primary_key=True)
-    delay_mean = Column(ARRAY(Integer))
+    delay = Column(ARRAY(Integer))
 
 
 class Operation(Base):
@@ -44,3 +44,28 @@ class Operation(Base):
     trip_id = Column(TEXT)
     date = Column(Date)
     delay = Column(ARRAY(Integer))
+
+
+class StopTime(Base):
+    __tablename__ = "stop_times"
+    __table_args__ = (
+        PrimaryKeyConstraint(
+            "trip_id",
+            "stop_sequence"
+        ),
+        {"schema": "duration_0001",  "extend_existing": True}
+    )
+
+    trip_id = Column(TEXT)
+    stop_id = Column(TEXT)
+    stop_sequence = Column(Integer)
+
+
+class Stop(Base):
+    __tablename__ = "stops"
+    __table_args__ = {"schema": "duration_0001",  "extend_existing": True}
+
+    stop_id = Column(TEXT, primary_key=True)
+    stop_name = Column(TEXT)
+    stop_lat = Column(NUMERIC)
+    stop_lon = Column(NUMERIC)
