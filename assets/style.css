@@ -1,0 +1,27 @@
+@keyframes gradientMove {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+
+#seq-slider .rc-slider-rail {
+    background-color: #1f0c40 !important;
+}
+
+#seq-slider .rc-slider-track {
+    background-color: #7209b7 !important;
+}
+
+#seq-slider .rc-slider-handle {
+    border: 2px solid #7209b7 !important;
+    background-color: white !important;
+}
+
+#seq-slider .rc-slider-mark {
+    background-color: white !important;
+}
+
+#seq-slider .rc-slider-mark-text {
+    color: white !important;
+}

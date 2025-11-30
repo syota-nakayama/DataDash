@@ -78,21 +78,25 @@ def get_route_mean(route_id):
     return df
 
 
-def get_operation_data(trip_id):
+def get_operation_data(trip_id_list):
+    target_df = pl.DataFrame()
     with chronous_session_maker() as session:
-        target_records = (
-            session
-            .query(orm_operation)
-            .filter(orm_operation.trip_id == trip_id)
-            .all()
-        )
+        for trip_id in trip_id_list:
+            target_records = (
+                session
+                .query(orm_operation)
+                .filter(orm_operation.trip_id == trip_id)
+                .all()
+            )
 
-        df = to_df(
-            orm_model=orm_operation,
-            records=target_records
-        )
+            df = to_df(
+                orm_model=orm_operation,
+                records=target_records
+            )
 
-    return df
+            target_df = pl.concat([target_df, df])
+
+    return target_df
 
 
 
@@ -179,3 +183,41 @@ def to_fullwidth(s):
     if s is None:
         return s
     return "".join(chr(ord(c)+0xFEE0) if 0x21 <= ord(c) <= 0x7E else c for c in s)
+
+
+def get_route_trip_dict():
+    target_dict = {}
+    with chronous_session_maker() as session:
+        target_records = (
+            session
+            .query(orm_route)
+            .all()
+        )
+
+        route_df = to_df(
+            orm_model=orm_route,
+            records=target_records
+        )
+
+    route_list = route_df["route_id"].to_list()
+
+    for route_id in route_list:
+        with chronous_session_maker() as session:
+            target_records = (
+                session
+                .query(orm_trip)
+                .filter(orm_trip.route_id == route_id)
+                .all()
+            )
+
+            trip_df = to_df(
+                orm_model=orm_trip,
+                records=target_records
+            )
+
+            trip_list = trip_df["trip_id"].to_list()
+            trip_list.append("便平均")
+
+            target_dict[route_id] = trip_list
+
+    return target_dict
